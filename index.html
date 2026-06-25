@@ -1,0 +1,886 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preservación Digital y SGDEA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        heading: ['Space Grotesk', 'sans-serif'],
+                        body: ['Inter', 'sans-serif'],
+                        brand: ['Bricolage Grotesque', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #091d30; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; }
+
+        /* Grain texture */
+        .grain::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            opacity: 0.03;
+            pointer-events: none;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        }
+
+        /* Slide system */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: translateX(60px);
+            transition: all 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+            pointer-events: none;
+            padding: 2rem;
+        }
+        .slide.active {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
+        .slide.exit-left {
+            opacity: 0;
+            transform: translateX(-60px);
+        }
+
+        /* Stagger children animation */
+        .slide.active .stagger { animation: fadeUp 0.6s ease forwards; opacity: 0; }
+        .slide.active .stagger:nth-child(1) { animation-delay: 0.1s; }
+        .slide.active .stagger:nth-child(2) { animation-delay: 0.2s; }
+        .slide.active .stagger:nth-child(3) { animation-delay: 0.3s; }
+        .slide.active .stagger:nth-child(4) { animation-delay: 0.4s; }
+        .slide.active .stagger:nth-child(5) { animation-delay: 0.5s; }
+        .slide.active .stagger:nth-child(6) { animation-delay: 0.6s; }
+        .slide.active .stagger:nth-child(7) { animation-delay: 0.7s; }
+        .slide.active .stagger:nth-child(8) { animation-delay: 0.8s; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); filter: blur(4px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(35,155,72,0.15); }
+            50% { box-shadow: 0 0 40px rgba(35,155,72,0.3); }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            20% { left: 200%; }
+            100% { left: 200%; }
+        }
+
+        .card-hover {
+            transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 0 50px -10px rgba(35,155,72,0.3);
+            border-color: rgba(35,155,72,0.3);
+        }
+
+        .shimmer-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        .shimmer-btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.8), transparent);
+            animation: shimmer 3s infinite cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Progress bar */
+        .progress-fill {
+            transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* Dot indicators */
+        .dot {
+            transition: all 0.4s ease;
+        }
+        .dot.active {
+            background: #239b48;
+            width: 2rem;
+            border-radius: 9999px;
+        }
+
+        /* Risk card red accent */
+        .risk-card { border-left: 3px solid #ef4444; }
+        .risk-card:hover { border-left-color: #f87171; box-shadow: 0 0 30px -8px rgba(239,68,68,0.3); }
+
+        /* Success card green accent */
+        .success-card { border-left: 3px solid #239b48 ; }
+        .success-card:hover { border-left-color: #239b48 ; box-shadow: 0 0 30px -8px rgba(35,155,72,0.3); }
+
+        /* Grid background */
+        .grid-bg {
+            background-image: linear-gradient(to right, rgba(34,34,34,0.5) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(34,34,34,0.5) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+        }
+
+        /* Number badge */
+        .num-badge {
+            background: linear-gradient(135deg, rgba(35,155,72,0.2), rgba(21,128,61,0.2));
+            border: 1px solid rgba(35,155,72,0.3);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { display: none; }
+
+        /* Tooltip for keyboard hint */
+        .kbd {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.65rem;
+            font-family: 'Space Grotesk', monospace;
+        }
+    </style>
+</head>
+<body class="grain text-white">
+
+    <!-- Background Effects -->
+    <div class="fixed inset-0 grid-bg pointer-events-none z-0"></div>
+    <div class="fixed top-1/4 -left-40 w-[600px] h-[600px] bg-[#239b48]/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
+    <div class="fixed bottom-1/4 -right-40 w-[500px] h-[500px] bg-[#239b48]/4 rounded-full blur-[120px] pointer-events-none z-0"></div>
+
+    <!-- Top Bar -->
+    <header class="fixed top-0 left-0 right-0 z-30 px-6 py-5 flex items-center justify-between" style="backdrop-filter: blur(4px); background: rgba(9,29,48,0.6);">
+        <div class="flex items-center">
+            <img src="Logos__alcaldia.png" alt="Alcaldía de Barranquilla" style="height: 58px; filter: brightness(0) invert(1); opacity: 0.9;">
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-xs text-neutral-500 font-body hidden md:block">Divulgación Institucional</span>
+            <span id="slideCounter" class="text-xs font-heading text-neutral-400 bg-white/5 border border-white/10 px-3 py-1 rounded-full">01 / 10</span>
+        </div>
+    </header>
+
+    <!-- Progress Bar -->
+    <div class="fixed top-[88px] left-0 right-0 z-30 h-[2px] bg-white/5">
+        <div id="progressBar" class="progress-fill h-full bg-gradient-to-r from-[#239b48] to-[#239b48]" style="width: 10%"></div>
+    </div>
+
+    <!-- Slides Container -->
+    <main id="slidesContainer" class="relative w-full h-full">
+
+        <!-- SLIDE 1: Portada -->
+        <section class="slide active" data-slide="0">
+            <div class="max-w-4xl mx-auto text-center">
+                <div class="stagger mb-6">
+                    <span class="inline-flex items-center gap-2 text-xs font-mono tracking-widest uppercase text-[#239b48] bg-[#239b48]/10 border border-[#239b48]/20 px-4 py-2 rounded-full">
+                        <span class="w-1.5 h-1.5 bg-[#239b48] rounded-full animate-pulse"></span>
+                        Divulgación Institucional
+                    </span>
+                </div>
+                <h1 class="stagger font-heading font-semibold text-4xl md:text-6xl lg:text-7xl tracking-tighter leading-[0.9] mb-6">
+                    Preservación Digital<br>
+                    <span class="text-[#239b48]">y SGDEA</span>
+                </h1>
+                <p class="stagger text-neutral-400 text-base md:text-lg font-light max-w-2xl mx-auto mb-10 leading-relaxed">
+                    Conozca los fundamentos, responsabilidades y buenas prácticas para la gestión, preservación y uso correcto del Sistema de Gestión Documental Electrónica de Archivo.
+                </p>
+                <div class="stagger flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <button onclick="goToSlide(1)" class="shimmer-btn bg-[#239b48] text-black font-heading font-medium text-sm tracking-wide px-8 py-3.5 rounded-full hover:scale-105 transition-transform duration-300" style="box-shadow: 0 0 20px rgba(35,155,72,0.6);">
+                        Comenzar presentación
+                    </button>
+                    <span class="text-neutral-500 text-xs flex items-center gap-2">
+                        Usa las flechas <span class="kbd">←</span> <span class="kbd">→</span>
+                    </span>
+                </div>
+                <div class="stagger mt-16 flex items-center justify-center gap-8 text-neutral-500">
+                    <div class="flex items-center gap-2 text-xs"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> 4 Temas</div>
+                    <div class="flex items-center gap-2 text-xs"><i data-lucide="layers" class="w-3.5 h-3.5"></i> 10 Diapositivas</div>
+                    <div class="flex items-center gap-2 text-xs"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ~5 min</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 2: ¿Qué es Preservación Digital? -->
+        <section class="slide" data-slide="1">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                    <div class="lg:col-span-7">
+                        <div class="stagger flex items-center gap-2 mb-4">
+                            <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">01</div>
+                            <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Tema 1</span>
+                        </div>
+                        <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-5 leading-tight">
+                            ¿Qué es la <span class="text-[#239b48]">Preservación Digital a largo plazo</span>?
+                        </h2>
+                        <p class="stagger text-neutral-400 font-light text-sm md:text-base leading-relaxed mb-6">
+                            Es el conjunto de acciones, estrategias y procedimientos orientados a garantizar el <strong class="text-neutral-200">acceso a largo plazo</strong> de los documentos digitales, preservando su autenticidad, integridad, confiabilidad y legibilidad a lo largo del tiempo.
+                        </p>
+                        <div class="stagger space-y-3">
+                            <div class="flex items-start gap-3">
+                                <div class="w-5 h-5 mt-0.5 rounded-full bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="check" class="w-3 h-3 text-[#239b48]"></i>
+                                </div>
+                                <p class="text-sm text-neutral-300">No es solo guardar archivos: es asegurar que <strong class="text-white">siguen siendo legibles</strong> y usables en el futuro.</p>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-5 h-5 mt-0.5 rounded-full bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="check" class="w-3 h-3 text-[#239b48]"></i>
+                                </div>
+                                <p class="text-sm text-neutral-300">Abarca la <strong class="text-white">migración de formatos</strong>, la creación de copias de seguridad y los metadatos.</p>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-5 h-5 mt-0.5 rounded-full bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="check" class="w-3 h-3 text-[#239b48]"></i>
+                                </div>
+                                <p class="text-sm text-neutral-300">Aplica a <strong class="text-white">documentos de archivo electrónicos, datos, registros y cualquier información digital</strong> de valor institucional.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-5">
+                        <div class="stagger relative">
+                            <div class="absolute -inset-4 bg-[#239b48]/5 rounded-3xl blur-2xl"></div>
+                            <div class="relative bg-[#050505] border border-white/10 rounded-2xl p-6 space-y-4">
+                                <div class="flex items-center gap-3 pb-3 border-b border-white/5">
+                                    <i data-lucide="database" class="w-5 h-5 text-[#239b48]"></i>
+                                    <span class="font-heading text-sm text-neutral-200">Conceptos Clave</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                                        <p class="text-xs text-[#239b48] font-mono mb-1">Autenticidad</p>
+                                        <p class="text-xs text-neutral-400">El documento es lo que dice ser.</p>
+                                    </div>
+                                    <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                                        <p class="text-xs text-[#239b48] font-mono mb-1">Integridad</p>
+                                        <p class="text-xs text-neutral-400">No ha sido alterado sin autorización.</p>
+                                    </div>
+                                    <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                                        <p class="text-xs text-[#239b48] font-mono mb-1">Confiabilidad</p>
+                                        <p class="text-xs text-neutral-400">Es un registro completo y preciso.</p>
+                                    </div>
+                                    <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                                        <p class="text-xs text-[#239b48] font-mono mb-1">Accesibilidad</p>
+                                        <p class="text-xs text-neutral-400">Puede ser consultado en cualquier momento.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 3: Pilares de la Preservación Digital -->
+        <section class="slide" data-slide="2">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="stagger flex items-center gap-2 mb-4">
+                    <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">01</div>
+                    <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Continuación</span>
+                </div>
+                <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-3">
+                    Pilares de la Preservación Digital
+                </h2>
+                <p class="stagger text-neutral-500 text-sm mb-10 max-w-2xl">Cuatro ejes fundamentales sostienen una estrategia eficaz de preservación.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-6 group">
+                        <div class="w-10 h-10 rounded-xl bg-[#239b48]/10 border border-[#239b48]/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                            <i data-lucide="hard-drive" class="w-5 h-5 text-[#239b48]"></i>
+                        </div>
+                        <h3 class="font-heading font-medium text-lg tracking-tight mb-2">Almacenamiento Seguro</h3>
+                        <p class="text-sm text-neutral-400 font-light leading-relaxed">Infraestructura redundante con copias en múltiples ubicaciones. Servidores con respaldo eléctrico y protección física.</p>
+                    </div>
+                    <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-6 group">
+                        <div class="w-10 h-10 rounded-xl bg-[#239b48]/10 border border-[#239b48]/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                            <i data-lucide="repeat" class="w-5 h-5 text-[#239b48]"></i>
+                        </div>
+                        <h3 class="font-heading font-medium text-lg tracking-tight mb-2">Migración de Formatos</h3>
+                        <p class="text-sm text-neutral-400 font-light leading-relaxed">Conversión periódica a formatos actuales para evitar la obsolescencia tecnológica. Ejemplo: .doc → .pdf/A.</p>
+                    </div>
+                    <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-6 group">
+                        <div class="w-10 h-10 rounded-xl bg-[#239b48]/10 border border-[#239b48]/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                            <i data-lucide="tags" class="w-5 h-5 text-[#239b48]"></i>
+                        </div>
+                        <h3 class="font-heading font-medium text-lg tracking-tight mb-2">Metadatos</h3>
+                        <p class="text-sm text-neutral-400 font-light leading-relaxed">Información que describe el documento: origen, fecha, autor, formato, clasificación. Sin metadatos, el documento pierde contexto.</p>
+                    </div>
+                    <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-6 group">
+                        <div class="w-10 h-10 rounded-xl bg-[#239b48]/10 border border-[#239b48]/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                            <i data-lucide="scan-eye" class="w-5 h-5 text-[#239b48]"></i>
+                        </div>
+                        <h3 class="font-heading font-medium text-lg tracking-tight mb-2">Control y Auditoría</h3>
+                        <p class="text-sm text-neutral-400 font-light leading-relaxed">Registro permanente de quién accede, modifica o consulta cada documento. Trazabilidad completa para garantizar transparencia.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 4: ¿Por qué es importante para la Alcaldía? -->
+        <section class="slide" data-slide="3">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="stagger flex items-center gap-2 mb-4">
+                    <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">01</div>
+                    <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Continuación</span>
+                </div>
+                <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-3">
+                    ¿Por qué es importante para <span class="text-[#239b48]">la Alcaldía</span>?
+                </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-6 group">
+                    <div class="space-y-8">
+                        <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                            <p class="text-xs text-[#239b48] font-mono mb-1">15 riesgos documentales a identificar en las dependencias</p>
+                        </div>
+                        <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                            <p class="text-xs text-[#239b48] font-mono mb-1">100% de entidades públicas obligadas por normativa AGN</p>
+                        </div>
+                        <div class="bg-white/[0.03] rounded-xl p-3.5 border border-white/5">
+                            <p class="text-xs text-[#239b48] font-mono mb-1">0 garantías sin una estrategia de preservación formal</p>
+                        </div>
+                    </div>
+                    </div>
+
+                <div class="stagger space-y-2">
+                    <div class="flex items-start gap-3 bg-[#050505] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-colors duration-300">
+                        <div class="num-badge w-6 h-6 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0 mt-0.5">1</div>
+                        <p class="text-sm text-neutral-300">Cumplimiento legal ante el Archivo General de la Nación (AGN) y normativa vigente.</p>
+                    </div>
+                    <div class="flex items-start gap-3 bg-[#050505] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-colors duration-300">
+                        <div class="num-badge w-6 h-6 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0 mt-0.5">2</div>
+                        <p class="text-sm text-neutral-300">Protección del patrimonio documental de todos los barranquilleros.</p>
+                    </div>
+                    <div class="flex items-start gap-3 bg-[#050505] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-colors duration-300">
+                        <div class="num-badge w-6 h-6 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0 mt-0.5">3</div>
+                        <p class="text-sm text-neutral-300">Continuidad del servicio: documentos disponibles cuando se necesiten.</p>
+                    </div>
+                    <div class="flex items-start gap-3 bg-[#050505] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-colors duration-300">
+                        <div class="num-badge w-6 h-6 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0 mt-0.5">4</div>
+                        <p class="text-sm text-neutral-300">Rendición de cuentas y transparencia ante organismos de control.</p>
+                    </div>
+                    <div class="flex items-start gap-3 bg-[#050505] border border-white/5 rounded-xl p-3 hover:border-white/10 transition-colors duration-300">
+                        <div class="num-badge w-6 h-6 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0 mt-0.5">5</div>
+                        <p class="text-sm text-neutral-300">Reducción del riesgo de pérdidas irreversibles por fallas tecnológicas o cambio de funcionarios.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 5: Responsabilidades Institucionales -->
+        <section class="slide" data-slide="4">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div class="lg:col-span-5">
+                        <div class="stagger flex items-center gap-2 mb-4">
+                            <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">02</div>
+                            <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Tema 2</span>
+                        </div>
+                        <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-5 leading-tight">
+                            Responsabilidades <span class="text-[#239b48]">Institucionales</span>
+                        </h2>
+                        <p class="stagger text-neutral-400 font-light text-sm md:text-base leading-relaxed mb-6">
+                            La preservación digital es una responsabilidad <strong class="text-neutral-200">compartida y jerárquica</strong>. Cada nivel de la organización cumple un rol específico e indispensable.
+                        </p>
+                        <div class="stagger bg-[#239b48]/5 border border-[#239b48]/10 rounded-xl p-4">
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-[#239b48] mt-0.5 flex-shrink-0"></i>
+                                <p class="text-xs text-[#239b48]/80 leading-relaxed">La Ley 527 de 1999 exige que las entidades públicas garanticen la conservación de sus documentos digitales. El incumplimiento puede generar responsabilidad administrativa, civil o penal.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-7">
+                        <div class="space-y-4">
+                            <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-5 flex gap-4">
+                                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-[#239b48]/20 to-green-600/20 border border-[#239b48]/20 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="crown" class="w-5 h-5 text-[#239b48]"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-heading font-medium text-base mb-1">Alta Dirección</h3>
+                                    <p class="text-xs text-neutral-400 leading-relaxed">Asignar recursos, aprobar políticas de gestión documental y garantizar el compromiso institucional con la preservación digital.</p>
+                                </div>
+                            </div>
+                            <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-5 flex gap-4">
+                                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-[#239b48]/20 to-green-600/20 border border-[#239b48]/20 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="folder-kanban" class="w-5 h-5 text-[#239b48]"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-heading font-medium text-base mb-1">Oficina de Gestión Documental / Archivo</h3>
+                                    <p class="text-xs text-neutral-400 leading-relaxed">Diseñar tablas de retención, aplicar cuadros de clasificación, supervisar la digitalización y garantizar la calidad de los procesos.</p>
+                                </div>
+                            </div>
+                            <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-5 flex gap-4">
+                                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-[#239b48]/20 to-green-600/20 border border-[#239b48]/20 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="monitor" class="w-5 h-5 text-[#239b48]"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-heading font-medium text-base mb-1">Área de Tecnología (TI)</h3>
+                                    <p class="text-xs text-neutral-400 leading-relaxed">Mantener la infraestructura, realizar respaldos, gestionar el SGDEA y asegurar la disponibilidad y seguridad de la plataforma.</p>
+                                </div>
+                            </div>
+                            <div class="stagger card-hover bg-[#050505] border border-white/10 rounded-2xl p-5 flex gap-4">
+                                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-[#239b48]/20 to-green-600/20 border border-[#239b48]/20 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="users" class="w-5 h-5 text-[#239b48]"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-heading font-medium text-base mb-1">Cada Funcionario</h3>
+                                    <p class="text-xs text-neutral-400 leading-relaxed">Radicar, tramitar y organizar documentos correctamente en el SGDEA. No conservar archivos fuera del sistema institucional.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 6: 15 Riesgos Documentales -->
+        <section class="slide" data-slide="5">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="stagger flex items-center gap-2 mb-3">
+                    <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">03</div>
+                    <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Tema 3</span>
+                </div>
+                <h2 class="stagger font-heading font-medium text-2xl md:text-3xl tracking-tight mb-5 leading-tight">
+                    <span class="text-[#239b48]">15</span> riesgos documentales a identificar
+                </h2>
+
+                <div class="stagger grid grid-cols-3 gap-2.5">
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">1</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Almacenamiento local en equipos personales</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">2</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Uso inadecuado de unidades compartidas</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">3</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Documentos que no ingresan al SGDEA</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">4</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Correos electrónicos como repositorio</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">5</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Formatos no estandarizados (DWG, MDB, MPP)</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">6</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Ausencia de metadatos</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">7</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Duplicidad documental sin control de versiones</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">8</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Dependencia de un solo funcionario</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">9</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Uso de medios extraíbles (USB, CD)</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">10</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Falta de copias de seguridad</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">11</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Información en aplicaciones no institucionales</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">12</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Documentos sin clasificación documental (TRD)</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">13</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Ausencia de firmas electrónicas</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">14</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Información crítica sin identificar</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-[#050505] border border-white/8 rounded-xl px-3 py-2.5 hover:border-[#239b48]/20 transition-colors duration-300">
+                        <div class="num-badge w-7 h-7 rounded-full flex items-center justify-center font-heading font-semibold text-xs text-[#239b48] flex-shrink-0">15</div>
+                        <p class="text-xs text-neutral-300 leading-snug">Desconocimiento de lineamientos de preservación</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 7: Riesgos del Mal Manejo Documental -->
+        <section class="slide" data-slide="6">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="stagger flex items-center gap-2 mb-4">
+                    <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">03</div>
+                    <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Tema 3</span>
+                </div>
+                <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-3">
+                    Riesgos del <span class="text-red-400">Mal Manejo</span> Documental
+                </h2>
+                <p class="stagger text-neutral-500 text-sm mb-10 max-w-2xl">Consecuencias reales de no aplicar buenas prácticas en la gestión y preservación de documentos.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="stagger risk-card card-hover bg-[#050505] border border-white/10 rounded-2xl p-5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                                <i data-lucide="file-x" class="w-4 h-4 text-red-400"></i>
+                            </div>
+                            <h3 class="font-heading font-medium text-sm">Pérdida de Información</h3>
+                        </div>
+                        <p class="text-xs text-neutral-400 leading-relaxed">Documentos de archivos institucionales eliminados por error, discos dañados o formatos obsoletos que ya no pueden abrirse. La información se pierde de forma irreversible.</p>
+                    </div>
+                    <div class="stagger risk-card card-hover bg-[#050505] border border-white/10 rounded-2xl p-5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                                <i data-lucide="scale" class="w-4 h-4 text-red-400"></i>
+                            </div>
+                            <h3 class="font-heading font-medium text-sm">Responsabilidad Legal</h3>
+                        </div>
+                        <p class="text-xs text-neutral-400 leading-relaxed">Incumplimiento de normas archivísticas (Ley 594 de 2000, Ley 1712 de 2014). Sanciones por pérdida o alteración de documentos públicos.</p>
+                    </div>
+                    <div class="stagger risk-card card-hover bg-[#050505] border border-white/10 rounded-2xl p-5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                                <i data-lucide="clock" class="w-4 h-4 text-red-400"></i>
+                            </div>
+                            <h3 class="font-heading font-medium text-sm">Retrasos en Trámites</h3>
+                        </div>
+                        <p class="text-xs text-neutral-400 leading-relaxed">Documentos mal radicados, sin clasificar o duplicados generan demoras, quejas ciudadanas e ineficiencia en la atención al público.</p>
+                    </div>
+                    <div class="stagger risk-card card-hover bg-[#050505] border border-white/10 rounded-2xl p-5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                                <i data-lucide="eye-off" class="w-4 h-4 text-red-400"></i>
+                            </div>
+                            <h3 class="font-heading font-medium text-sm">Vulneración de Seguridad</h3>
+                        </div>
+                        <p class="text-xs text-neutral-400 leading-relaxed">Documentos confidenciales en equipos personales, sin cifrado o accesibles para personal no autorizado. Riesgo de fuga de datos sensibles.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 8: Impacto visual de los riesgos -->
+        <section class="slide" data-slide="7">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="stagger flex items-center gap-2 mb-4">
+                    <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">03</div>
+                    <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Continuación</span>
+                </div>
+                <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-10">
+                    ¿Qué pasa si no actuamos?
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="stagger text-center">
+                        <div class="relative inline-block mb-5">
+                            <div class="w-28 h-28 rounded-full border-2 border-red-500/30 flex items-center justify-center" style="animation: pulse-glow 2s infinite; --tw-shadow-color: rgba(239,68,68,0.2);">
+                                <span class="font-heading text-4xl font-light text-red-400 tracking-tighter">📄</span>
+                            </div>
+                        </div>
+                        <h3 class="font-heading font-medium text-sm mb-2">Documentos inencontrables</h3>
+                        <p class="text-xs text-neutral-500 leading-relaxed px-4">De las entidades sin sistema de gestión documental no logran ubicar documentos en menos de 15 minutos.</p>
+                    </div>
+                    <div class="stagger text-center">
+                        <div class="relative inline-block mb-5">
+                            <div class="w-28 h-28 rounded-full border-2 border-red-500/30 flex items-center justify-center" style="animation: pulse-glow 2s infinite 0.5s; --tw-shadow-color: rgba(239,68,68,0.2);">
+                                <span class="font-heading text-4xl font-light text-red-400 tracking-tighter">❌</span>
+                            </div>
+                        </div>
+                        <h3 class="font-heading font-medium text-sm mb-2">Pérdida por obsolescencia</h3>
+                        <p class="text-xs text-neutral-500 leading-relaxed px-4">De los documentos digitales creados hace 10 años están en formatos que ya no se pueden abrir correctamente.</p>
+                    </div>
+                    <div class="stagger text-center">
+                        <div class="relative inline-block mb-5">
+                            <div class="w-28 h-28 rounded-full border-2 border-red-500/30 flex items-center justify-center" style="animation: pulse-glow 2s infinite 1s; --tw-shadow-color: rgba(239,68,68,0.2);">
+                                <span class="font-heading text-4xl font-light text-red-400 tracking-tighter">🗃️</span>
+                            </div>
+                        </div>
+                        <h3 class="font-heading font-medium text-sm mb-2">Archivos en pendrives</h3>
+                        <p class="text-xs text-neutral-500 leading-relaxed px-4">De funcionarios aún guardan documentos institucionales en dispositivos personales sin respaldo ni seguridad.</p>
+                    </div>
+                </div>
+
+                <div class="stagger mt-10 bg-red-500/5 border border-red-500/10 rounded-xl p-5 flex items-start gap-4 max-w-3xl mx-auto">
+                    <i data-lucide="alert-octagon" class="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0"></i>
+                    <div>
+                        <p class="text-sm text-red-300 font-medium mb-1">Dato clave</p>
+                        <p class="text-xs text-neutral-400 leading-relaxed">La implementación adecuada del SGDEA y las políticas de preservación digital reducen estos riesgos.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 9: Uso Correcto del SGDEA -->
+        <section class="slide" data-slide="8">
+            <div class="max-w-5xl mx-auto w-full">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div class="lg:col-span-5">
+                        <div class="stagger flex items-center gap-2 mb-4">
+                            <div class="num-badge w-7 h-7 rounded-lg flex items-center justify-center font-heading font-semibold text-sm text-[#239b48]">04</div>
+                            <span class="text-xs font-mono tracking-widest uppercase text-neutral-500">Tema 4</span>
+                        </div>
+                        <h2 class="stagger font-heading font-medium text-3xl md:text-4xl tracking-tight mb-5 leading-tight">
+                            Uso Correcto del <span class="text-[#239b48]">SGDEA</span>
+                        </h2>
+                        <p class="stagger text-neutral-400 font-light text-sm leading-relaxed mb-5">
+                            El <strong class="text-neutral-200">Sistema de Gestión Documental Electrónica de Archivo</strong> es la herramienta oficial para radicar, tramitar, firmar y archivar documentos de manera segura y trazable.
+                        </p>
+                        <p class="stagger text-neutral-500 text-xs leading-relaxed">
+                            Todo documento de la entidad debe pasar por el SGDEA. No se permite el uso de correos personales, WhatsApp o almacenamiento local como medio oficial de gestión.
+                        </p>
+                    </div>
+                    <div class="lg:col-span-7">
+                        <div class="space-y-3">
+                            <div class="stagger success-card card-hover bg-[#050505] border border-white/10 rounded-xl p-4 flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <span class="font-heading text-xs font-semibold text-[#239b48]">1</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-heading text-sm font-medium mb-0.5">Radicar correctamente</h4>
+                                    <p class="text-xs text-neutral-400">Completar todos los campos obligatorios: tipo documental, dependencia, asunto, anexos. Una radicación incompleta genera devoluciones y retrasos.</p>
+                                </div>
+                            </div>
+                            <div class="stagger success-card card-hover bg-[#050505] border border-white/10 rounded-xl p-4 flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <span class="font-heading text-xs font-semibold text-[#239b48]">2</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-heading text-sm font-medium mb-0.5">Clasificar con la TRD</h4>
+                                    <p class="text-xs text-neutral-400">Asignar la serie y subserie documental según la Tabla de Retención Documental. Esto define el tiempo de conservación y la disposición final.</p>
+                                </div>
+                            </div>
+                            <div class="stagger success-card card-hover bg-[#050505] border border-white/10 rounded-xl p-4 flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <span class="font-heading text-xs font-semibold text-[#239b48]">3</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-heading text-sm font-medium mb-0.5">Usar formatos permitidos</h4>
+                                    <p class="text-xs text-neutral-400">PDF/A para documentos finales, TIFF/JPEG para imágenes, ODT para documentos en elaboración. Evitar formatos propietarios cerrados.</p>
+                                </div>
+                            </div>
+                            <div class="stagger success-card card-hover bg-[#050505] border border-white/10 rounded-xl p-4 flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <span class="font-heading text-xs font-semibold text-[#239b48]">4</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-heading text-sm font-medium mb-0.5">Firmar electrónicamente</h4>
+                                    <p class="text-xs text-neutral-400">Utilizar la firma electrónica institucional para dar validez legal. La firma en papel debe ser la excepción, no la regla.</p>
+                                </div>
+                            </div>
+                            <div class="stagger success-card card-hover bg-[#050505] border border-white/10 rounded-xl p-4 flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-[#239b48]/10 flex items-center justify-center flex-shrink-0">
+                                    <span class="font-heading text-xs font-semibold text-[#239b48]">5</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-heading text-sm font-medium mb-0.5">Gestionar expedientes</h4>
+                                    <p class="text-xs text-neutral-400">Agrupar documentos por expediente, mantener el orden chronological y no retirar documentos sin autorización del archivo.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 10: Cierre / Resumen -->
+        <section class="slide" data-slide="9">
+            <div class="max-w-4xl mx-auto text-center">
+                <div class="stagger mb-6">
+                    <div class="w-16 h-16 rounded-2xl bg-[#239b48]/10 border border-[#239b48]/20 flex items-center justify-center mx-auto mb-6" style="animation: float 3s ease-in-out infinite;">
+                        <i data-lucide="check-circle-2" class="w-8 h-8 text-[#239b48]"></i>
+                    </div>
+                </div>
+                <h2 class="stagger font-heading font-medium text-3xl md:text-5xl tracking-tighter leading-[0.95] mb-5">
+                    Compromiso con la<br>
+                    <span class="text-[#239b48]">Memoria Institucional</span>
+                </h2>
+                <p class="stagger text-neutral-400 font-light text-sm md:text-base max-w-2xl mx-auto mb-10 leading-relaxed">
+                    La preservación digital no es una tarea técnica aislada: es un compromiso de toda la institución. Cada documento que radicamos, clasificamos y conservamos correctamente es un acto de transparencia y responsabilidad con la ciudadanía.
+                </p>
+
+                <div class="stagger grid grid-cols-1 sm:grid-cols-4 gap-4 mb-10">
+                    <div class="bg-[#050505] border border-white/10 rounded-xl p-4">
+                        <i data-lucide="database" class="w-5 h-5 text-[#239b48] mx-auto mb-2"></i>
+                        <p class="text-xs font-heading text-neutral-300">Preservar</p>
+                    </div>
+                    <div class="bg-[#050505] border border-white/10 rounded-xl p-4">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-[#239b48] mx-auto mb-2"></i>
+                        <p class="text-xs font-heading text-neutral-300">Responsabilizarse</p>
+                    </div>
+                    <div class="bg-[#050505] border border-white/10 rounded-xl p-4">
+                        <i data-lucide="alert-triangle" class="w-5 h-5 text-[#239b48] mx-auto mb-2"></i>
+                        <p class="text-xs font-heading text-neutral-300">Prevenir riesgos</p>
+                    </div>
+                    <div class="bg-[#050505] border border-white/10 rounded-xl p-4">
+                        <i data-lucide="monitor-check" class="w-5 h-5 text-[#239b48] mx-auto mb-2"></i>
+                        <p class="text-xs font-heading text-neutral-300">Usar el SGDEA</p>
+                    </div>
+                </div>
+
+                <div class="stagger flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <button onclick="goToSlide(0)" class="shimmer-btn bg-[#239b48] text-black font-heading font-medium text-sm tracking-wide px-8 py-3.5 rounded-full hover:scale-105 transition-transform duration-300" style="box-shadow: 0 0 20px rgba(35,155,72,0.6);">
+                        Volver al inicio
+                    </button>
+                    <span class="text-neutral-500 text-xs">Gracias por su atención</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Navigation Controls -->
+    <div class="fixed bottom-0 left-0 right-0 z-30 px-6 py-4 flex items-center justify-between" style="backdrop-filter: blur(4px); background: rgba(9,29,48,0.6);">
+        <button id="prevBtn" onclick="prevSlide()" class="flex items-center gap-2 text-sm text-neutral-400 hover:text-white transition-colors duration-300 disabled:opacity-20 disabled:cursor-not-allowed" disabled>
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span class="hidden sm:inline font-heading text-xs tracking-wide">Anterior</span>
+        </button>
+
+        <!-- Dot indicators -->
+        <div id="dotsContainer" class="flex items-center gap-2">
+            <button class="dot active w-2 h-2 rounded-full bg-neutral-600" data-dot="0" onclick="goToSlide(0)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="1" onclick="goToSlide(1)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="2" onclick="goToSlide(2)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="3" onclick="goToSlide(3)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="4" onclick="goToSlide(4)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="5" onclick="goToSlide(5)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="6" onclick="goToSlide(6)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="7" onclick="goToSlide(7)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="8" onclick="goToSlide(8)"></button>
+            <button class="dot w-2 h-2 rounded-full bg-neutral-600" data-dot="9" onclick="goToSlide(9)"></button>
+        </div>
+
+        <button id="nextBtn" onclick="nextSlide()" class="flex items-center gap-2 text-sm text-neutral-400 hover:text-white transition-colors duration-300 disabled:opacity-20 disabled:cursor-not-allowed">
+            <span class="hidden sm:inline font-heading text-xs tracking-wide">Siguiente</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Slide logic
+        let currentSlide = 0;
+        const totalSlides = 10;
+        const slides = document.querySelectorAll('.slide');
+        const dots = document.querySelectorAll('.dot');
+        const progressBar = document.getElementById('progressBar');
+        const slideCounter = document.getElementById('slideCounter');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+
+        function updateUI() {
+            // Update slides
+            slides.forEach((slide, i) => {
+                slide.classList.remove('active', 'exit-left');
+                if (i === currentSlide) {
+                    slide.classList.add('active');
+                } else if (i < currentSlide) {
+                    slide.classList.add('exit-left');
+                }
+            });
+
+            // Update dots
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentSlide);
+            });
+
+            // Update progress bar
+            const progress = ((currentSlide + 1) / totalSlides) * 100;
+            progressBar.style.width = progress + '%';
+
+            // Update counter
+            const num = String(currentSlide + 1).padStart(2, '0');
+            const total = String(totalSlides).padStart(2, '0');
+            slideCounter.textContent = `${num} / ${total}`;
+
+            // Update buttons
+            prevBtn.disabled = currentSlide === 0;
+            nextBtn.disabled = currentSlide === totalSlides - 1;
+        }
+
+        function goToSlide(index) {
+            if (index < 0 || index >= totalSlides || index === currentSlide) return;
+            currentSlide = index;
+            updateUI();
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                goToSlide(currentSlide + 1);
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                goToSlide(currentSlide - 1);
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                goToSlide(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                goToSlide(totalSlides - 1);
+            }
+        });
+
+        // Touch/swipe support
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            const diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }, { passive: true });
+
+        // Initial state
+        updateUI();
+    </script>
+</body>
+</html>
